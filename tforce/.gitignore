@@ -1,0 +1,7 @@
+tmp/
+__pycache__
+.idea
+saves/
+plt/
+logs_async/
+config.json
