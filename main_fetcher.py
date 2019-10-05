@@ -83,7 +83,7 @@ bitmex_currency = ['']
 # Using different databases for each 
 
 
-binance_db = dataset.connect('postgresql://postgres:Paswurd12453709@104.211.19.206/binance')
+binance_db = dataset.connect('postgresql://gabe@bender-storage:Paswurd12453709@bender-storage.postgres.database.azure.com/binance')
 
 
 binance = ccxt.binance({
