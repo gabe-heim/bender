@@ -3,8 +3,7 @@ from os import path
 from enum import Enum
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
-from sqlalchemy import text
+import sqlalchemy as s
 from utils import raise_refactor, last_good_commit
 from sklearn.preprocessing import robust_scale
 import os
@@ -67,17 +66,38 @@ class Data(object):
             'Weighted_Price': 'vwap'
         }
 
-        filenames = {
-            # 'bitstamp': 'bitstampUSD_1-min_data_2012-01-01_to_2018-06-27.csv',
-            'coinbase': 'coinbaseUSD_1-min_data_2014-12-01_to_2018-06-27.csv',
-            # 'coincheck': 'coincheckJPY_1-min_data_2014-10-31_to_2018-06-27.csv'
-        }
-        primary_table = 'coinbase'
-        self.target = f"{primary_table}_close"
+        pairs = [
+            'BTC/USDTred',
+            'ETH/USDTred',
+            'TRX/BTCred',
+            'ADA/BTCred',
+            'XLM/BTCred',
+            'XRP/BTCred',
+            'IOTA/BTCred',
+            'KMD/BTCred',
+            'NANO/BTCred',
+            'EOS/BTCred',
+            'BNB/BTCred',
+            'NEO/BTCred',
+            'LTC/BTCred',
+            'XMR/BTCred',
+            'DASH/BTCred',
+            'ETH/BTCred',
+            'XEM/BTCred',
+            'QTUM/BTCred',
+            'DCR/BTCred',
+            'ZEC/BTCred'
+        ]
+        primary_table = 'BTC/USDTred'
+        self.target = "close"
 
         df = None
-        for table, filename in filenames.items():
-            df_ = pd.read_csv(path.join(path.dirname(__file__), 'bitcoin-historical-data', filename))
+        for table in ['BTC/USDTred']:
+            ticks = s.sql.text("""
+                SELECT *
+                FROM {}
+            """.format(table))
+            df_ = pd.read_sql(ticks, DB, params={})
             col_renames_ = {k: f"{table}_{v}" for k, v in col_renames.items()}
             df_ = df_.rename(columns=col_renames_)
             ts = f"{table}_timestamp"
@@ -86,7 +106,7 @@ class Data(object):
             df = df_ if df is None else df.join(df_)
 
         # too quiet before 2015, time waste. copy() to avoid pandas errors
-        df = df.loc['2015':].copy()
+        df = df.loc['2019':].copy()
 
         df['month'] = df.index.month
         df['day'] = df.index.day
