@@ -98,9 +98,10 @@ def post_process(hypers):
     o = agent['update_mode']
     o['frequency'] = math.ceil(o['batch_size'] / o['frequency'])
     # agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * o['batch_size']
+    
     agent['max_episode_timesteps'] = BitcoinEnv.EPISODE_LEN
     agent['batch_size'] = MAX_BATCH_SIZE
-    #agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE + 1
+    # agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE + 1
 
     agent.update(agent['baseline_stuff'])
     del agent['baseline_stuff']
@@ -175,10 +176,11 @@ space['pg_prob_ration_model'] = {
 
 space['ppo_model'] = {
     # Doesn't seem to matter; consider removing
-    'step_optimizer': {
-        'type': 'adam',  # hp.choice('type', ['nadam', 'adam']),
+    
+    # 'step_optimizer': {
+        # 'type': 'adam',  # hp.choice('type', ['nadam', 'adam']),
         'learning_rate': scope.ten_to_the_neg(hp.uniform('learning_rate', 2., 5.)),
-    },
+    # },
 
     'optimization_steps': scope.int(hp.quniform('optimization_steps', 1, 50, 1)),  # 5 FIXME
 
