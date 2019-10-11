@@ -98,7 +98,9 @@ def post_process(hypers):
     o = agent['update_mode']
     o['frequency'] = math.ceil(o['batch_size'] / o['frequency'])
     # agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * o['batch_size']
-    agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE + 1
+    agent['max_episode_timesteps'] = BitcoinEnv.EPISODE_LEN
+    agent['batch_size'] = MAX_BATCH_SIZE
+    #agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE + 1
 
     agent.update(agent['baseline_stuff'])
     del agent['baseline_stuff']
@@ -301,11 +303,11 @@ def main():
             session_config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=fraction))
             agent['execution'] = {'type': 'single', 'session_config': session_config, 'distributed_spec': None}
 
-        pprint(processed)
-        pprint(network)
+        print("Processed: \n", processed)
+        print("Network: \n", network)
 
         env = BitcoinEnv(processed, args)
-        agent = agents_dict['ppo_agent'](
+        agent = agents_dict['ppo'](
             states=env.states,
             actions=env.actions,
             network=network,

@@ -57,14 +57,14 @@ class Data(object):
         # TODO overlapping stride would cause test/train overlap. Tweak it so train can overlap data, but test gets silo'd
 
         col_renames = {
-            'Timestamp': 'timestamp',
-            'Open': 'open',
+            'Timestamp': 'time_ms',
+            'Open': 'opening',
             'High': 'high',
             'Low': 'low',
             'Close': 'close',
-            'Volume_(BTC)': 'volume_btc',
             'Volume_(Currency)': 'volume',
-            'Weighted_Price': 'vwap'
+            'Bid': 'bid',
+            'Ask': 'ask'
         }
 
         pairs = [
@@ -96,12 +96,12 @@ class Data(object):
         for table in ['BTC/USDTred']:
             ticks = s.sql.text("""
                 SELECT *
-                FROM {}
+                FROM "{}"
             """.format(table))
             df_ = pd.read_sql(ticks, self.db, params={})
-            col_renames_ = {k: f"{table}_{v}" for k, v in col_renames.items()}
+            col_renames_ = {k: v for k, v in col_renames.items()}
             df_ = df_.rename(columns=col_renames_)
-            ts = f"{table}_timestamp"
+            ts = "time_ms"
             df_[ts] = pd.to_datetime(df_[ts], unit='s')
             df_ = df_.set_index(ts)
             df = df_ if df is None else df.join(df_)
@@ -118,9 +118,9 @@ class Data(object):
         # TODO indicators
 
         diff_cols = [
-            f"{table}_{k}" for k in
-            'open high low close volume_btc volume vwap'.split(' ')
-            for table in filenames.keys()
+            k for k in
+            'opening high low close volume bid ask'.split(' ')
+            for table in ['BTC/USDTred']
         ]
         df[diff_cols] = df[diff_cols].pct_change()\
             .replace([np.inf, -np.inf], np.nan)\

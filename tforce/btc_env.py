@@ -60,7 +60,7 @@ class BitcoinEnv(Environment):
         self.data = Data(ep_len=self.EPISODE_LEN, arbitrage=h.custom.arbitrage, indicators={})
 
         # gdax min order size = .01btc; kraken = .002btc
-        self.min_trade = {Exchange.GDAX: .01, Exchange.KRAKEN: .002}[EXCHANGE]
+        self.min_trade = {Exchange.BINANCE: .01, Exchange.GDAX: .01, Exchange.KRAKEN: .002}[EXCHANGE]
         self.update_btc_price()
 
         # Action space
