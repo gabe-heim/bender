@@ -10,7 +10,7 @@ I actually do want to try NervanaSystems/Coach, that one's new since I started d
 env back to Gym format. Anyone wanna give it a go?
 """
 
-import random, time, requests, pdb, gdax, math, pickle, os, shutil, copy
+import random, time, requests, pdb,  math, pickle, os, shutil, copy
 from sklearn.model_selection import TimeSeriesSplit
 from enum import Enum
 import numpy as np

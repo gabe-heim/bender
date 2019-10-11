@@ -6,10 +6,10 @@ import pandas as pd
 import pickle
 import tensorflow as tf
 from sqlalchemy.sql import text
-from tensorforce import TensorForceError
+import tensorforce
 from tensorforce.agents import agents as agents_dict
-from tensorforce.core.networks import layer as TForceLayers
-from tensorforce.core.networks.network import LayeredNetwork
+#from tensorforce.core.networks import layer as TForceLayers
+#from tensorforce.core.networks.network import LayeredNetwork
 
 from sqlalchemy.dialects import mysql as psql
 from hyperopt import fmin, tpe, hp, Trials
