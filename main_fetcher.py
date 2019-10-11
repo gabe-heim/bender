@@ -18,7 +18,7 @@ print(ccxt.__file__)
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(root)
 
-mode = 'red'
+mode = 'blue'
 
 msec = 1000
 minute = 60 * msec

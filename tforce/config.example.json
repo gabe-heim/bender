@@ -1,7 +1,7 @@
 {
-  "DB_RUNS": "postgres://user:password@host/runs",
-  "DB_HISTORY": "postgres://user:password@host/history",
-  "DB_HISTORY_LIVE": "postgres://user:password@host/history_live",
+  "DB_RUNS": "postgres:///runs",
+  "DB_HISTORY": "postgres:///history",
+  "DB_HISTORY_LIVE": "/history_live",
   "GDAX": {
     "passphrase": "",
     "key": "",
