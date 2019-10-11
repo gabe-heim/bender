@@ -12,7 +12,7 @@ import os
 # (see https://stackoverflow.com/questions/3724900/python-ssl-problem-with-multiprocessing)
 config_json = json.load(open(os.path.dirname(__file__) + '/../config.json'))
 DB = config_json['DB_HISTORY'].split('/')[-1]
-engine_runs = create_engine(config_json['DB_RUNS'])
+engine_runs = s.create_engine(config_json['DB_RUNS'])
 
 # Decide which exchange you want to trade on (significant even in training). Pros & cons; Kraken's API provides more
 # details than GDAX (bid/ask spread, VWAP, etc) which means predicting its next price-action is easier for RL. It
@@ -50,6 +50,7 @@ class Data(object):
         self.window = window
         self.arbitrage = arbitrage
         self.indicators = indicators
+        self.db = s.create_engine(config_json['DB_HISTORY'])
 
         self.ep_stride = ep_len  # disjoint
         # self.ep_stride = 100  # overlap; shift each episode by x seconds.
@@ -97,7 +98,7 @@ class Data(object):
                 SELECT *
                 FROM {}
             """.format(table))
-            df_ = pd.read_sql(ticks, DB, params={})
+            df_ = pd.read_sql(ticks, self.db, params={})
             col_renames_ = {k: f"{table}_{v}" for k, v in col_renames.items()}
             df_ = df_.rename(columns=col_renames_)
             ts = f"{table}_timestamp"
