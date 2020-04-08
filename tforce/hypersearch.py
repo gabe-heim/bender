@@ -32,6 +32,7 @@ def network_spec(hypers):
         dense = {
             'size': s,
             'l2_regularization': net.l2,
+            #'entropy_regularization': net.l1
             'l1_regularization': net.l1
         }
         if not net.batch_norm:
@@ -52,6 +53,7 @@ def network_spec(hypers):
             'type': 'conv2d',
             # 'bias': net.bias,
             'l2_regularization': net.l2,
+            #'entropy_regularization': net.l1
             'l1_regularization': net.l1
         })
     arr.append({'type': 'flatten'})
@@ -99,15 +101,15 @@ def post_process(hypers):
     o['frequency'] = math.ceil(o['batch_size'] / o['frequency'])
     # agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * o['batch_size']
     
-    agent['max_episode_timesteps'] = BitcoinEnv.EPISODE_LEN
-    agent['batch_size'] = MAX_BATCH_SIZE
-    # agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE + 1
+    #agent['max_episode_timesteps'] = BitcoinEnv.EPISODE_LEN
+    #agent['batch_size'] = MAX_BATCH_SIZE
+    #agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE + 1
 
     agent.update(agent['baseline_stuff'])
     del agent['baseline_stuff']
     if agent['baseline_mode']:
         o = agent['baseline_optimizer']
-        # o['num_steps'] = agent['optimization_steps']
+        #o['num_steps'] = agent['optimization_steps']
         o['optimizer']['learning_rate'] = agent['step_optimizer']['learning_rate']
         o['optimizer']['type'] = agent['step_optimizer']['type']
 
@@ -141,7 +143,7 @@ space['memory_model'] = {
     'memory': {
         'type': 'latest',
         'include_next_states': False,
-        'capacity': None,  # 5000  # BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE,  # hp.uniform('capacity', 2000, 20000, 500)
+        'capacity': BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE,  # hp.uniform('capacity', 2000, 20000, 500)
     }
 }
 
@@ -152,11 +154,14 @@ space['distribution_model'] = {
 }
 
 space['pg_model'] = {
-    'baseline_stuff': hp.choice('baseline_stuff', [
-        {'baseline_mode': None},
-        {
-            'baseline': {'type': 'custom'},
-            'baseline_mode': 'states',
+    #'baseline_stuff': hp.choice('baseline_stuff', [
+    #    {'baseline_mode': None},
+    'baseline_stuff': {
+        'baseline': {
+                'type': 'custom',
+                'network': None
+            },    
+        'baseline_mode': 'states',
             'baseline_optimizer': {
                 'type': 'multi_step',
                 # Consider having baseline_optimizer learning hypers independent of the main learning hypers.
@@ -165,10 +170,10 @@ space['pg_model'] = {
                 'num_steps': scope.int(hp.quniform('num_steps', 1, 20, 1)),  # 5 FIXME
                 'optimizer': {}  # see post_process()
             },
-            'gae_lambda': hp.choice('gae_lambda', [1., None]),
             # scope.min_threshold(hp.uniform('gae_lambda', .8, 1.), .9, None)
-        }
-    ])
+        },
+'gae_lambda': hp.choice('gae_lambda', [1., None]),
+    #])
 }
 space['pg_prob_ration_model'] = {
     'likelihood_ratio_clipping': .2,  # scope.min_threshold(hp.uniform('likelihood_ratio_clipping', 0., 1.), .05, None),
@@ -177,10 +182,10 @@ space['pg_prob_ration_model'] = {
 space['ppo_model'] = {
     # Doesn't seem to matter; consider removing
     
-    # 'step_optimizer': {
-        # 'type': 'adam',  # hp.choice('type', ['nadam', 'adam']),
+     'step_optimizer': {
+         'type': 'adam',  # hp.choice('type', ['nadam', 'adam']),
         'learning_rate': scope.ten_to_the_neg(hp.uniform('learning_rate', 2., 5.)),
-    # },
+     },
 
     'optimization_steps': scope.int(hp.quniform('optimization_steps', 1, 50, 1)),  # 5 FIXME
 
@@ -309,7 +314,7 @@ def main():
         print("Network: \n", network)
 
         env = BitcoinEnv(processed, args)
-        agent = agents_dict['ppo'](
+        agent = agents_dict['ppo_agent'](
             states=env.states,
             actions=env.actions,
             network=network,
