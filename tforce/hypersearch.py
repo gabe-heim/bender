@@ -7,7 +7,7 @@ import pickle
 import tensorflow as tf
 from sqlalchemy.sql import text
 import tensorforce
-from tensorforce.agents import agents as agents_dict
+from tensorforce.agents import ProximalPolicyOptimization
 #from tensorforce.core.networks import layer as TForceLayers
 #from tensorforce.core.networks.network import LayeredNetwork
 
@@ -32,7 +32,8 @@ def network_spec(hypers):
         dense = {
             'size': s,
             'l2_regularization': net.l2,
-            'l1_regularization': net.l1
+            # 'l1_regularization': net.l1
+            'entropy_regularization': net.l1
         }
         if not net.batch_norm:
             arr.append({'type': 'dense', 'activation': net.activation, **dense})
@@ -96,7 +97,7 @@ def post_process(hypers):
     agent, custom = hypers['ppo_agent'], hypers['custom']
 
     o = agent['update_mode']
-    o['frequency'] = math.ceil(o['batch_size'] / o['frequency'])
+    o['update_frequency'] = math.ceil(o['batch_size'] / o['update_frequency'])
     # agent['memory']['capacity'] = BitcoinEnv.EPISODE_LEN * o['batch_size']
     
     agent['max_episode_timesteps'] = BitcoinEnv.EPISODE_LEN
@@ -105,14 +106,14 @@ def post_process(hypers):
 
     agent.update(agent['baseline_stuff'])
     del agent['baseline_stuff']
-    if agent['baseline_mode']:
-        o = agent['baseline_optimizer']
-        # o['num_steps'] = agent['optimization_steps']
-        o['optimizer']['learning_rate'] = agent['step_optimizer']['learning_rate']
-        o['optimizer']['type'] = agent['step_optimizer']['type']
+    # if agent['baseline_mode']:
+    o = agent['baseline_optimizer']
+    # o['num_steps'] = agent['optimization_steps']
+    o['optimizer']['learning_rate'] = agent['step_optimizer']['learning_rate']
+    o['optimizer']['type'] = agent['step_optimizer']['type']
 
-        agent['baseline']['network'] = network_spec(custom)
-        # if main['gae_lambda']: main['gae_lambda'] = main['discount']
+    agent['baseline_network'] = network_spec(custom)
+    # if main['gae_lambda']: main['gae_lambda'] = main['discount']
     return hypers
 
 
@@ -132,17 +133,17 @@ space['agent'] = {
 
 MAX_BATCH_SIZE = 15
 space['memory_model'] = {
-    'update_mode': {
-        'unit': 'episodes',
+    # 'update_mode': {
+        # 'unit': 'episodes',
         'batch_size': scope.int(hp.quniform('batch_size', 1, MAX_BATCH_SIZE, 1)),  # 5 FIXME
-        'frequency': scope.int(hp.quniform('frequency', 1, 3, 1)),  # t-shirt sizes, reverse order
-    },
+        'update_frequency': scope.int(hp.quniform('frequency', 1, 3, 1)),  # t-shirt sizes, reverse order
+    # },
 
-    'memory': {
-        'type': 'latest',
-        'include_next_states': False,
-        'capacity': None,  # 5000  # BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE,  # hp.uniform('capacity', 2000, 20000, 500)
-    }
+    # 'memory': {
+        # 'type': 'latest',
+        # 'include_next_states': False,
+        # 'capacity': None,  # 5000  # BitcoinEnv.EPISODE_LEN * MAX_BATCH_SIZE,  # hp.uniform('capacity', 2000, 20000, 500)
+    # }
 }
 
 space['distribution_model'] = {
@@ -155,8 +156,7 @@ space['pg_model'] = {
     'baseline_stuff': hp.choice('baseline_stuff', [
         {'baseline_mode': None},
         {
-            'baseline': {'type': 'custom'},
-            'baseline_mode': 'states',
+            #'baseline_mode': 'states',
             'baseline_optimizer': {
                 'type': 'multi_step',
                 # Consider having baseline_optimizer learning hypers independent of the main learning hypers.
@@ -309,7 +309,7 @@ def main():
         print("Network: \n", network)
 
         env = BitcoinEnv(processed, args)
-        agent = agents_dict['ppo'](
+        agent = ProximalPolicyOptimization(
             states=env.states,
             actions=env.actions,
             network=network,
