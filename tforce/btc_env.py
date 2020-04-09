@@ -66,7 +66,7 @@ class BitcoinEnv(Environment):
         # Action space
         # see {last_good_commit_ for action_types other than 'single_discrete'
         # In single_discrete, we allow buy2%, sell2%, hold (and nothing else)
-        self.actions_ = dict(type='int', shape=(), num_actions=3)
+        self.actions_ = dict(type='int', shape=(), num_values=3)
 
         # Observation space
         # width = step-window (150 time-steps)
