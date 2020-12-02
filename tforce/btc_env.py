@@ -138,6 +138,7 @@ class BitcoinEnv(Environment):
         act_btc = act_pct * (acc.step.cash if act_pct > 0 else acc.step.value)
 
         fee = {
+            Exchange.BINANCE: .001,
             Exchange.GDAX: 0.0025,  # https://support.gdax.com/customer/en/portal/articles/2425097-what-are-the-fees-on-gdax-
             Exchange.KRAKEN: 0.0026  # https://www.kraken.com/en-us/help/fees
         }[EXCHANGE]
