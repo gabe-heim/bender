@@ -201,14 +201,14 @@ class RunManager():
         labels = datad['labels']
         all = self.create_inout_sequences(features.values, list(labels), train_window)
         random.shuffle(all)
-    #     display(all)
+    #     print(all)
         train = all[:-math.floor(len(features)/2.5)]
         validate = all[-math.floor(len(features)/2.5):-math.floor(len(features)/4)]
         test = all[-math.floor(len(features)/4):]
 
         tdf = pd.DataFrame(train)
-        display(tdf)
-        display(tdf[1].values[0])
+        print(tdf)
+        print(tdf[1].values[0])
         print(tdf.__dict__)
 
         all_labels = [x for x in data.label.unique() if str(x) != 'nan']
@@ -259,7 +259,8 @@ class RunManager():
         data = datad['data']
         train_window = run.train_window
         n = 2
-        pool = multiprocessing.Pool(multiprocessing.cpu_count() - n) 
+        pool = multiprocessing.Pool(math.floor(multiprocessing.cpu_count() / 3))
+        print("using ", math.floor(multiprocessing.cpu_count() / 3), "cpus")
         pca_components = run.pca_components
         label_mode = run.label_mode['mode']
         target_percent = run.label_mode['target_percent']
@@ -344,25 +345,25 @@ class RunManager():
         datad['features'] = data.copy().drop(['index', 'Date', 'label'] + dependent_indicators + independent_indicators, axis=1
                                    ).fillna(0).replace([np.inf, -np.inf], np.nan).ffill()
 
-        display(datad['features'])
+        print(datad['features'])
 
         datad['labels'] = data['label'].copy().replace([np.inf, -np.inf], np.nan).fillna(INVALID_LABEL)
         features = datad['features']
         labels = datad['labels']
-        display(datad['labels'])
+        print(datad['labels'])
             
         # rfe
         if rfe_select > 0:
             print('\n Performing RFE \n')
             datad['rfe_features'] = self.rfe(features, labels, sample_size=2000, trials=4, select=rfe_select)
-            display(datad['rfe_features'])
+            print(datad['rfe_features'])
             rfe_features = datad['rfe_features']
             
         # pca
         if pca_components:
             print('\n Performing PCA \n')
             datad['rfe_pca_features'] = get_pca_features(rfe_features, pca_components=7)
-            display(datad['rfe_pca_features'])
+            print(datad['rfe_pca_features'])
             
         # sequence and split to train val test
         print('\n Building sequences and splitting to train, val, and test sets \n')
@@ -371,15 +372,15 @@ class RunManager():
             combined = pd.concat([data[chosen_dependent], chosen_indicators], axis=1)
         else:
             print("WORKS")
-            display(data[chosen_dependent])
+            print(data[chosen_dependent])
             combined = data[chosen_dependent]
-        display(combined)
+        print(combined)
         print(len(labels))
         train, validate, test = self.get_sequenced_train_val_test(combined, datad, train_window=train_window)
         datad['train'] = train
         datad['validate'] = validate
         datad['test'] = test
-        display(train[0])
+        print(train[0])
         
         # normalize certain features within sequence
         print('\n Normalizing certain features within sequences \n')
@@ -417,7 +418,7 @@ class RunManager():
             except RuntimeError:
                 print('test err ', a)
                 pass
-        display(train[0])
+        print(train[0])
             
         pool.close()
         
@@ -448,7 +449,8 @@ class RunManager():
         self.run_data[-1]['confusion_matrix'] = cnf_matrix
         
         self.runs.append(self.run_data)
-        display(pd.DataFrame(self.run_data))
+        print("RUN RESULTS:")
+        print(self.run_data)
         
         
 
@@ -590,7 +592,7 @@ class RunManager():
 #                 self.run_data, 
 #                 orient = 'columns',
 #         )
-#         display(result_df)
+#         print(result_df)
         
 
 #         with open(f'results/{fileName}.json', 'w', encoding='utf-8') as f:
