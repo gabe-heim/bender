@@ -157,8 +157,9 @@ class RunManager():
             }
         }
 
-        self.data_sets['BTCUSDT']['data'] = self.data_sets['BTCUSDT']['data'][:math.floor(
-            len(self.data_sets['BTCUSDT']['data'])/40)]#16)]
+        start_r = 180000
+
+        self.data_sets['BTCUSDT']['data'] = self.data_sets['BTCUSDT']['data'][start_r:start_r+20000].reset_index().drop(['index'], axis=1)
         
         self.global_labels = None
         
@@ -207,9 +208,8 @@ class RunManager():
         test = all[-math.floor(len(features)/4):]
 
         tdf = pd.DataFrame(train)
-        print(tdf)
+        print(tdf[0:1])
         print(tdf[1].values[0])
-        print(tdf.__dict__)
 
         all_labels = [x for x in data.label.unique() if str(x) != 'nan']
 
@@ -345,25 +345,25 @@ class RunManager():
         datad['features'] = data.copy().drop(['index', 'Date', 'label'] + dependent_indicators + independent_indicators, axis=1
                                    ).fillna(0).replace([np.inf, -np.inf], np.nan).ffill()
 
-        print(datad['features'])
+        print(datad['features'][0:2])
 
         datad['labels'] = data['label'].copy().replace([np.inf, -np.inf], np.nan).fillna(INVALID_LABEL)
         features = datad['features']
         labels = datad['labels']
-        print(datad['labels'])
+        print(datad['labels'][0:2])
             
         # rfe
         if rfe_select > 0:
             print('\n Performing RFE \n')
             datad['rfe_features'] = self.rfe(features, labels, sample_size=2000, trials=4, select=rfe_select)
-            print(datad['rfe_features'])
+            print(datad['rfe_features'][0:2])
             rfe_features = datad['rfe_features']
             
         # pca
         if pca_components:
             print('\n Performing PCA \n')
             datad['rfe_pca_features'] = get_pca_features(rfe_features, pca_components=7)
-            print(datad['rfe_pca_features'])
+            print(datad['rfe_pca_features'][0:2])
             
         # sequence and split to train val test
         print('\n Building sequences and splitting to train, val, and test sets \n')
@@ -372,9 +372,9 @@ class RunManager():
             combined = pd.concat([data[chosen_dependent], chosen_indicators], axis=1)
         else:
             print("WORKS")
-            print(data[chosen_dependent])
+            print(data[chosen_dependent][0:2])
             combined = data[chosen_dependent]
-        print(combined)
+        print(combined[0:2])
         print(len(labels))
         train, validate, test = self.get_sequenced_train_val_test(combined, datad, train_window=train_window)
         datad['train'] = train
