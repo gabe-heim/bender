@@ -99,6 +99,19 @@ def get_labels(row, data=None, train_window=None, target_percent=.01, stop_loss_
         elif target_index < stop_loss_index:
             return 2
         return 1
+    if mode == 'since_bound_2':
+#         max_index = data.High[row[6]:row[6]+21].idxmax()
+#         min_index = data.Low[row[6]:row[6]+21].idxmin()
+        try:
+#             target_index = data.High[row[6]:row[6]+train_window+1].loc[data.High >= row[4] * (1 + target_percent)].index[0]
+            target_index = data.Close[row[6]:row[6]+train_window+1].loc[data.Close >= row[4] * (1 + target_percent)].index[0]
+        except IndexError:
+            target_index = data.index.max() + train_window * 2
+
+        if target_index > row[6]+train_window:
+            return 0
+
+        return 1
     
 def normalize_sequence_columns(sequence_label, range=(-1, 1), indices=None):
     sequence, label = sequence_label
@@ -150,10 +163,10 @@ class RunManager():
 #         }
         self.data_sets = {
             'sp500': {
-                'data': pd.read_csv(f'/Users/gabeheim/documents/concatenated_price_data/sp500.csv', index_col=False).drop(['Adj Close'], axis=1)
+                'data': pd.read_csv(f'./source files/sp500.csv', index_col=False).drop(['Adj Close'], axis=1)
             },
             'BTCUSDT': {
-                'data': pd.read_csv(f'/Users/gabeheim/documents/concatenated_price_data/BTCUSDT.csv', index_col=False)
+                'data': pd.read_csv(f'./source files/BTCUSDT.csv', index_col=False)
             }
         }
 
@@ -258,9 +271,6 @@ class RunManager():
         datad = self.data_sets[name]
         data = datad['data']
         train_window = run.train_window
-        n = 2
-        pool = multiprocessing.Pool(math.floor(multiprocessing.cpu_count() / 3))
-        print("using ", math.floor(multiprocessing.cpu_count() / 3), "cpus")
         pca_components = run.pca_components
         label_mode = run.label_mode['mode']
         target_percent = run.label_mode['target_percent']
@@ -273,13 +283,15 @@ class RunManager():
         
         data['index'] = data.index
         # too volatile class?
-        n = 0
+        n = 3
 
         start = time.time()
-        data['label'] = pool.map(partial(get_labels, data=data, train_window=train_window, mode=label_mode,
+        with multiprocessing.Pool(n) as pool:
+            data['label'] = pool.map(partial(get_labels, data=data, train_window=train_window, mode=label_mode,
                                        target_percent=target_percent, stop_loss_percent=stop_loss_percent), 
                                  [tuple(r) for r in data.to_numpy()] )  # process data_inputs iterable with pool
         print(name, 'pool label took: ', time.time() - start)
+
         self.global_labels = [x for x in sorted(self.data_sets[run.data_set]['data'].label.unique()) if str(x) != 'nan']
         self.epoch_num_correct = {'train': {k: 0 for k in self.global_labels},
                                   'validate': {k: 0 for k in self.global_labels}}
@@ -389,30 +401,33 @@ class RunManager():
         validate = datad['validate']
         test = datad['test']
 
+        n = 3
+        #with multiprocessing.Pool(n) as pool:
         for a in range(attempts):
             try:
                 start = time.time()
-                train = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), train.copy())
+                #train = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), train.copy())
+                train = [normalize_sequence_columns(x, indices=list(range(len(chosen_dependent)))) for x in train.copy()]
                 print(len(train), 'train took:', time.time() - start)
                 break
             except RuntimeError:
                 print('train err ', a)
                 pass
-
+        with multiprocessing.Pool(n) as pool:
+            for a in range(attempts):
+                try:
+                    start = time.time()
+                    validate = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), validate.copy())
+                    print(len(validate), 'val took:', time.time() - start)
+                    break
+                except RuntimeError:
+                    print('val err ', a)
+                    pass
         for a in range(attempts):
             try:
                 start = time.time()
-                validate = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), validate.copy())
-                print(len(validate), 'val took:', time.time() - start)
-                break
-            except RuntimeError:
-                print('val err ', a)
-                pass
-
-        for a in range(attempts):
-            try:
-                start = time.time()
-                test = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), test.copy())
+                #test = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), test.copy())
+                test = [normalize_sequence_columns(x, indices=list(range(len(chosen_dependent)))) for x in test.copy()]
                 print(len(test), 'test took:', time.time() - start)
                 break
             except RuntimeError:
@@ -420,7 +435,6 @@ class RunManager():
                 pass
         print(train[0])
             
-        pool.close()
         
     # record the count, hyper-param, model, loader of each run
     # record sample images and network graph to TensorBoard    
@@ -447,10 +461,13 @@ class RunManager():
         
         cnf_matrix = sklearn.metrics.confusion_matrix(self.test_labels, self.test_predictions)
         self.run_data[-1]['confusion_matrix'] = cnf_matrix
-        
+       
+        self.test_labels = []
+        self.test_predictions = []
+
         self.runs.append(self.run_data)
         print("RUN RESULTS:")
-        print(self.run_data)
+        print(self.run_data[-1])
         
         
 
@@ -685,10 +702,9 @@ def cross_entropy(outputs, labels):
 def dummy_activation(x):
     return x
 
-# put all hyper params into a OrderedDict, easily expandable
 params = OrderedDict(
-    data_set = ['sp500'],#'BTCUSDT'], #'sp500', 
-    hidden_neurons = [50],#, 100, 5], #1
+    data_set = ['sp500', 'BTCUSDT'], #'sp500', 
+    hidden_neurons = [75, 150, 225],#, 100, 5], #1
     
     batch_size = [1],
     
@@ -712,33 +728,20 @@ params = OrderedDict(
     validation_split = [0.1],
     
     
-    train_window = [10],
+    train_window = [5, 10, 20],
     pca_components = [None],#10
     label_mode = [
-#         {
-#         'mode': 'since3',
-#         'label_count': 3,
-#         'target_percent': .03, 
-#         'stop_loss_percent': .03
-#     },
-#         {
-#         'mode': 'average',
-#         'label_count': 2,
-#         'target_percent': None, 
-#         'stop_loss_percent': None
-#     },
-        {
-        'mode': 'next',
+    {
+        'mode': 'since_bound_2',
         'label_count': 2,
-        'target_percent': None, 
-        'stop_loss_percent': None
-    }
-    ],
-    rfe_select = [3],
-    chosen_dependent = [ ['Close', 'Volume', 'sma_10'] ],
-    dropout_p = [.4]
+        'target_percent': .02, 
+        'stop_loss_percent': None#.01
+    },
+        ],
+    rfe_select = [0, 3, 6, 10, 15],
+    chosen_dependent = [ ['Close', 'Volume', 'sma_10'], ['Volume'], ['Close'], ['sma_10'] ],
+    dropout_p = [.1, .3]
 )
-
 
 def negative_one(x):
     return -1
@@ -779,10 +782,12 @@ m = RunManager()
 
 
 
-epochs = 3
+epochs = 6
 # get all runs from params using RunBuilder class
 # print(f"Runs: {RunBuilder.get_runs(params)}")
-for run in RunBuilder.get_runs(params):
+all_runs = list(RunBuilder.get_runs(params))
+random.shuffle(all_runs)
+for run in all_runs:
     print(run)
     # if params changes, following line of code should reflect the changes too
 #     len(m.data_sets[run.data_set]['train'][0][0][0])
@@ -793,7 +798,7 @@ for run in RunBuilder.get_runs(params):
         input_size = len(run.chosen_dependent) + run.rfe_select
 
         net = NeuralNet(input_size=input_size, output_neurons=run.label_mode['label_count'],
-                       dropout_p=run.dropout_p)
+                       dropout_p=run.dropout_p, hidden_neurons=run.hidden_neurons)
     #         hidden_neurons=run.hidden_neurons,
     #         hidden_activation=run.hidden_activation, output_activation=run.loss_output['output_activation'])
         optimizer = run.optimizer(net.parameters(), lr=run.learning_rate, momentum=run.momentum)#copy.deepcopy(run.optimizer)
