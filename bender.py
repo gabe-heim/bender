@@ -670,7 +670,7 @@ class RunManager():
     #     print(cm)
 
         plt.imshow(cm, interpolation='nearest', cmap=cmap, aspect='auto')
-        plt.title(f'{self.run_params.label_mode['data_set']}: Confusion matrix')
+        plt.title('Confusion matrix')
         plt.colorbar()
         tick_marks = np.arange(len(classes))
         plt.xticks(tick_marks, classes, rotation=90)
