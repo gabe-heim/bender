@@ -1,0 +1,40 @@
+{
+    "run": 1,
+    "epoch": 1,
+    "train loss": 0.5066227016328101,
+    "validate loss": 0.3454118014999166,
+    "train accuracy": 0.5758988015978695,
+    "validate accuracy": 0.8489304812834224,
+    "epoch duration": 8.940952062606812,
+    "run duration": 37.267263889312744,
+    "train_mode": "lstm_cnn",
+    "hidden_neurons": 75,
+    "batch_size": 1,
+    "name": "Xavier Uniform",
+    "learning_rate": 0.01,
+    "momentum": 0.1,
+    "validation_split": 0.1,
+    "train_window": 5,
+    "pca_components": null,
+    "data_set": "BTCUSDT",
+    "mode": "since_bound_2",
+    "label_count": 2,
+    "target_percent": 0.01,
+    "stop_loss_percent": null,
+    "rfe_select": 3,
+    "chosen_dependent": [
+        "Volume"
+    ],
+    "dropout_p": 0.3,
+    "test_accuracy": 0.8531300160513644,
+    "confusion_matrix": [
+        [
+            2032,
+            136
+        ],
+        [
+            230,
+            94
+        ]
+    ]
+}

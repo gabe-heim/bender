@@ -70,8 +70,12 @@ def get_labels(row, data=None, train_window=None, target_percent=.01, stop_loss_
         return None
     if mode == 'next':
         try:
+#             print(row)
             next = data.Close.values[row[6]+1]
-        except:
+        except Exception as e:
+#             print(e)
+#             print("Ran into error label")
+#             return -1
             next = 0
 #         print(next)
         if next > row[4]: #row[4] * (1 + target_percent):
@@ -98,6 +102,19 @@ def get_labels(row, data=None, train_window=None, target_percent=.01, stop_loss_
             return 0
         elif target_index < stop_loss_index:
             return 2
+        return 1
+    if mode == 'since_bound_2':
+#         max_index = data.High[row[6]:row[6]+21].idxmax()
+#         min_index = data.Low[row[6]:row[6]+21].idxmin()
+        try:
+#             target_index = data.High[row[6]:row[6]+train_window+1].loc[data.High >= row[4] * (1 + target_percent)].index[0]
+            target_index = data.Close[row[6]:row[6]+train_window+1].loc[data.Close >= row[4] * (1 + target_percent)].index[0]
+        except IndexError:
+            target_index = data.index.max() + train_window * 2
+        
+        if target_index > row[6]+train_window:
+            return 0
+
         return 1
     
 def normalize_sequence_columns(sequence_label, range=(-1, 1), indices=None):
@@ -136,30 +153,18 @@ class RunManager():
         ]
         
         # Data sets to choose from
-#         self.data_sets = {
-# #             'sp500': {
-# #                 'train': data_sets['sp500']['train'],
-# #                 'validate': data_sets['sp500']['validate'],
-# #                 'test': data_sets['sp500']['test']
-# #             },
-#             'BTCUSDT': {
-#                 'train': data_sets['BTCUSDT']['train'],
-#                 'validate': data_sets['BTCUSDT']['validate'],
-#                 'test': data_sets['BTCUSDT']['test']
-#             }
-#         }
         self.data_sets = {
             'sp500': {
-                'data': pd.read_csv(f'/Users/gabeheim/documents/concatenated_price_data/sp500.csv', index_col=False).drop(['Adj Close'], axis=1)
+                'data': pd.read_csv(f'./source files/sp500.csv', index_col=False).drop(['Adj Close'], axis=1)
             },
             'BTCUSDT': {
-                'data': pd.read_csv(f'/Users/gabeheim/documents/concatenated_price_data/BTCUSDT.csv', index_col=False)
+                'data': pd.read_csv(f'./source files/BTCUSDT.csv', index_col=False)
             }
         }
 
         start_r = 180000
 
-        self.data_sets['BTCUSDT']['data'] = self.data_sets['BTCUSDT']['data'][start_r:start_r+20000].reset_index().drop(['index'], axis=1)
+        self.data_sets['BTCUSDT']['data'] = self.data_sets['BTCUSDT']['data'][start_r:start_r+40000].reset_index().drop(['index'], axis=1)
         
         self.global_labels = None
         
@@ -254,13 +259,10 @@ class RunManager():
     
     def prepare_data(self, run):
         
-        name = run.data_set
+        name = run.label_mode['data_set']
         datad = self.data_sets[name]
         data = datad['data']
         train_window = run.train_window
-        n = 2
-        pool = multiprocessing.Pool(math.floor(multiprocessing.cpu_count() / 3))
-        print("using ", math.floor(multiprocessing.cpu_count() / 3), "cpus")
         pca_components = run.pca_components
         label_mode = run.label_mode['mode']
         target_percent = run.label_mode['target_percent']
@@ -273,14 +275,16 @@ class RunManager():
         
         data['index'] = data.index
         # too volatile class?
-        n = 0
+        n = 3
 
         start = time.time()
-        data['label'] = pool.map(partial(get_labels, data=data, train_window=train_window, mode=label_mode,
+        with multiprocessing.Pool(n) as pool:
+            data['label'] = pool.map(partial(get_labels, data=data, train_window=train_window, mode=label_mode,
                                        target_percent=target_percent, stop_loss_percent=stop_loss_percent), 
                                  [tuple(r) for r in data.to_numpy()] )  # process data_inputs iterable with pool
         print(name, 'pool label took: ', time.time() - start)
-        self.global_labels = [x for x in sorted(self.data_sets[run.data_set]['data'].label.unique()) if str(x) != 'nan']
+
+        self.global_labels = [x for x in sorted(self.data_sets[name]['data'].label.unique()) if str(x) != 'nan']
         self.epoch_num_correct = {'train': {k: 0 for k in self.global_labels},
                                   'validate': {k: 0 for k in self.global_labels}}
         self.test_correct_count = {k: 0 for k in self.global_labels}
@@ -389,30 +393,33 @@ class RunManager():
         validate = datad['validate']
         test = datad['test']
 
+        n = 3
+        #with multiprocessing.Pool(n) as pool:
         for a in range(attempts):
             try:
                 start = time.time()
-                train = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), train.copy())
+                #train = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), train.copy())
+                train = [normalize_sequence_columns(x, indices=list(range(len(chosen_dependent)))) for x in train.copy()]
                 print(len(train), 'train took:', time.time() - start)
                 break
             except RuntimeError:
                 print('train err ', a)
                 pass
-
+        with multiprocessing.Pool(n) as pool:
+            for a in range(attempts):
+                try:
+                    start = time.time()
+                    validate = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), validate.copy())
+                    print(len(validate), 'val took:', time.time() - start)
+                    break
+                except RuntimeError:
+                    print('val err ', a)
+                    pass
         for a in range(attempts):
             try:
                 start = time.time()
-                validate = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), validate.copy())
-                print(len(validate), 'val took:', time.time() - start)
-                break
-            except RuntimeError:
-                print('val err ', a)
-                pass
-
-        for a in range(attempts):
-            try:
-                start = time.time()
-                test = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), test.copy())
+                #test = pool.map(partial(normalize_sequence_columns, indices=list(range(len(chosen_dependent)))), test.copy())
+                test = [normalize_sequence_columns(x, indices=list(range(len(chosen_dependent)))) for x in test.copy()]
                 print(len(test), 'test took:', time.time() - start)
                 break
             except RuntimeError:
@@ -420,7 +427,6 @@ class RunManager():
                 pass
         print(train[0])
             
-        pool.close()
         
     # record the count, hyper-param, model, loader of each run
     # record sample images and network graph to TensorBoard    
@@ -429,6 +435,7 @@ class RunManager():
         self.run_start_time = time.time()
 
         self.run_params = run
+        print(self.run_params)
         self.run_count += 1
 #         self.run_plot_statistics[self.run_count] = {}
     
@@ -437,21 +444,39 @@ class RunManager():
         self.prepare_data(run)
 
     # when run ends, close TensorBoard, zero epoch count
-    def end_run(self, net):
+    def end_run(self, net, folder_name):
         self.epoch_count = 0
-        
+
         self.run_data[-1]['net'] = net
-        
-        test_accuracy = sum([v for k, v in self.test_correct_count.items()]) / (len(self.data_sets[self.run_params.data_set][phase]))
+
+        test_accuracy = sum([v for k, v in self.test_correct_count.items()]) / (len(self.data_sets[self.run_params.label_mode['data_set']][phase]))
         self.run_data[-1]['test_accuracy'] = test_accuracy
-        
+        self.plot_accuracy_loss(folder_name)
+
         cnf_matrix = sklearn.metrics.confusion_matrix(self.test_labels, self.test_predictions)
         self.run_data[-1]['confusion_matrix'] = cnf_matrix
+        self.plot_confusion_matrix(folder_name, pd.DataFrame(self.run_data).tail(1))
         
         self.runs.append(self.run_data)
         print("RUN RESULTS:")
-        print(self.run_data)
+        save_copy = self.run_data[-1].copy()
+        save_copy.pop('function', None)
+        save_copy.pop('hidden_activation', None)
+        save_copy.pop('criterion', None)
+        save_copy.pop('output_activation', None)
+        save_copy.pop('optimizer', None)
+        save_copy.pop('net', None)
+        save_copy['confusion_matrix'] = save_copy['confusion_matrix'].tolist()
+        print(save_copy)
         
+        with open(f"results/{folder_name}/run_data/{self.run_count}.json", 'w', encoding='utf-8') as f:
+            json.dump(save_copy, f, ensure_ascii=False, indent=4)
+            
+        self.test_labels = []
+        self.test_predictions = []
+
+        
+
         
 
         # Plot normalized confusion matrix
@@ -460,8 +485,7 @@ class RunManager():
         #fig.align_labels()
 
         # fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
-#         self.plot_confusion_matrix(cnf_matrix, classes=self.run_params.label_subset, normalize=True,
-#                               title='Normalized confusion matrix')
+        
         
 
     # zero epoch count, loss, accuracy, 
@@ -485,8 +509,8 @@ class RunManager():
         # record epoch loss and accuracy
         def get_all_correct(dict):
             return sum([v for k, v in dict.items()])
-        loss = {phase: self.epoch_loss[phase] / (len(self.data_sets[self.run_params.data_set][phase])) for phase in ['train', 'validate']}
-        accuracy = {phase: get_all_correct(self.epoch_num_correct[phase]) / (len(self.data_sets[self.run_params.data_set][phase])) for phase in ['train', 'validate']}
+        loss = {phase: self.epoch_loss[phase] / (len(self.data_sets[self.run_params.label_mode['data_set']][phase])) for phase in ['train', 'validate']}
+        accuracy = {phase: get_all_correct(self.epoch_num_correct[phase]) / (len(self.data_sets[self.run_params.label_mode['data_set']][phase])) for phase in ['train', 'validate']}
         
         # Write into 'results' (OrderedDict) for all run related data
         results = OrderedDict()
@@ -549,20 +573,105 @@ class RunManager():
             l_i = 0
         return 1 if int(torch.argmax(output)) == l_i else 0
     
-    def plot_confusion_matrix(self, cm, classes, variables, normalize=False, cmap=plt.cm.Blues):
+    def plot_accuracy_loss(self, folder_name):
+        source_df = pd.DataFrame(self.run_data)
+        data_set = self.run_params.label_mode['data_set']
+        df = source_df.loc[source_df.run == self.run_count]
+
+        run_data = df#.loc[df.run == run_i]
+        epochs = run_data.epoch.values
+
+        # Accuracy 1st y-axis
+        fig, ax1 = plt.subplots()
+
+        # Loss 2nd y-axis
+        ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+        colors = ['red', 'green', 'blue']
+
+        for phase_i, phase in enumerate(['train', 'validate']):
+
+            accuracy = run_data[f'{phase} accuracy'].values
+
+#             # record record
+#             if phase == 'validate':
+#                 record[data_set].append({
+#                     'max_accuracy': np.max(accuracy).round(3),
+#                     'epoch': np.where(accuracy == np.max(accuracy))[0] + 1,
+
+#     #                 'run': run_i
+#                 })
+    #             for variable in variables:
+    #                 record[data_set][-1][variable] = run_data[variable].values[0]
+
+            loss = run_data[f'{phase} loss'].values
+            phase_accuracy, = ax1.plot(epochs, accuracy, 
+                 color=colors[phase_i],   
+                 linewidth=1.0
+            )
+            phase_accuracy.set_label(f"{phase.capitalize()} Accuracy")
+
+            phase_loss, = ax2.plot(epochs, loss, 
+                 color=colors[phase_i],   
+                 linewidth=1.0,
+                 linestyle='--' 
+            )
+            phase_loss.set_label(f"{phase.capitalize()} Loss")
+
+        ax1.legend(loc='lower left')
+        ax2.legend(loc='lower right')
+
+        x_label = "Epoch"
+    #     for variable in variables:
+    #         x_label += f"\n{variable} = {run_data[variable].values[0]}"
+        ax1.set_xlabel(x_label)
+        ax1.set_ylabel("Accuracy")
+        ax2.set_ylabel("Loss")
+
+        plt.title(f"{run_data['data_set'].values[0]}: Epoch vs. Accuracy and Loss")
+
+    #     ax1.set_ybound(lower=0.35, upper=.65)
+
+        save_string = "sigma_relationship.png"
+    #     for variable in variables:
+    #         save_string = f"{data_set}_{variable}_{run_data[variable].values[0]}_" + save_string
+        plt.savefig(f"./results/{folder_name}/loss_accuracy/la_{self.run_count}", bbox_inches='tight')
+#             plt.show()
+    #     break
+    
+    def plot_confusion_matrix(self, folder_name, df_row, normalize=True, cmap=plt.cm.Blues):
         """
         This function prints and plots the confusion matrix.
         Normalization can be applied by setting `normalize=True`.
         """
-                
+        print(df_row.confusion_matrix.values)
+        cm = deepcopy(df_row.confusion_matrix.values[0])
+        classes = m.global_labels #df_row['label_subset'].values[0]
+        print(cm)
         if normalize:
             cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-            print(f"Normalized Confusion Matrix (Run #{len(self.runs) - 1})")
+            print(f"Normalized Confusion Matrix (Run #{df_row.run.values[0]})")
         else:
-            print('Confusion matrix, without normalization')        
+            print('Confusion matrix, without normalization')
 
-        ax = plt.imshow(cm, interpolation='nearest', cmap=cmap)
-        plt.title(f'{df_row.data_set}: Confusion matrix')
+    #     print(cm)
+    #     new = [[] for class_ in range(len(classes))]
+    #     print(new[0])
+    #     for row_i, row in enumerate(cm):
+    #         for col_i, col in enumerate(row):
+    #             print(row, col)
+    #             print(row_i, col_i)
+    #             print(col.item(), row.sum().item(), round(col.item() / row.sum().item(), 2))
+    #             new[row_i].append(round(col.item() / row.sum().item(), 2))
+    #             print(new)
+    #             print()
+    #         print()
+
+    #     cm = np.asarray(new)
+    #     print(cm)
+
+        plt.imshow(cm, interpolation='nearest', cmap=cmap, aspect='auto')
+        plt.title(f'{self.run_params.label_mode['data_set']}: Confusion matrix')
         plt.colorbar()
         tick_marks = np.arange(len(classes))
         plt.xticks(tick_marks, classes, rotation=90)
@@ -570,6 +679,7 @@ class RunManager():
 
         fmt = '.2f' if normalize else 'd'
         thresh = cm.max() / 2.
+
         for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
             plt.text(j, i, format(cm[i, j], fmt),
                      horizontalalignment="center",
@@ -577,31 +687,25 @@ class RunManager():
 
         plt.tight_layout()
         plt.ylabel('True label')
-        
-        x_label = "Predicted label"
-        for variable in variables:
-            x_label += f"\n{variable} = {run_data[variable].values[0]}"
-        ax.set_xlabel(x_label)
-        plt.show()
-    
-    # save end results of all runs into json for further analysis
-    def results(self, fileName):
-        return
-        
-#         result_df = pd.DataFrame.from_dict(
-#                 self.run_data, 
-#                 orient = 'columns',
-#         )
-#         print(result_df)
-        
 
-#         with open(f'results/{fileName}.json', 'w', encoding='utf-8') as f:
-#             json.dump(self.run_data, f, ensure_ascii=False, indent=4)
+        x_label = "Predicted label"
+    #     for variable in variables:
+    #         x_label += f"\n{variable} = {df_row[variable].values[0]}"
+        plt.xlabel(x_label)
+
+        save_string = "confusion_matrix.png"
+    #     for variable in variables:
+    #         save_string = f"{data_set}_{variable}_{df_row[variable].values[0]}_" + save_string
+    #     plt.savefig(f"./{variables[0]}/" + save_string, bbox_inches='tight')
+
+        plt.savefig(f"./results/{folder_name}/confusion_matrix/cm_{self.run_count}", bbox_inches='tight')
+#         plt.show()
+    
 
 class NeuralNet(nn.Module):
     def __init__(self, weight_init={'function':torch.nn.init.xavier_uniform}, hidden_neurons=128, output_neurons=None, 
                  hidden_activation=functional.relu, output_activation=torch.nn.Softmax(dim=2), input_size=None,
-                dropout_p=None):
+                dropout_p=None, train_mode='lstm_cnn'):
         super(NeuralNet, self).__init__()
         
         # hyper parameters
@@ -609,40 +713,47 @@ class NeuralNet(nn.Module):
         self.hidden_activation = hidden_activation
         self.output_activation = output_activation
         self.input_size = input_size
+        self.train_mode = train_mode
         
         # layers
         self.lstm = nn.LSTM(input_size, hidden_neurons)
-        self.dropout = nn.Dropout(p=dropout_p)
+        
         
         self.hidden_cell = (torch.zeros(1,1,hidden_neurons),
                             torch.zeros(1,1,hidden_neurons))
         
 #         self.cnn = [#nn.Sequential(
-#             nn.Conv1d(input_size, 128, 1),
-#             nn.Conv1d(in_channels=128, out_channels=256, kernel_size=8, stride=1),
-#             nn.BatchNorm1d(256),
-#             nn.ReLU(),
-#             nn.Conv1d(256, 128, kernel_size=5, stride=1),
-#             nn.BatchNorm1d(128),
-#             nn.ReLU(),
-#             nn.Conv1d(128, 128, kernel_size=3, stride=1),
-#             nn.BatchNorm1d(128),
+#             nn.Conv1d(input_size, self.hidden_neurons, 1),
+        self.linear1 = nn.Linear(in_features=self.input_size, out_features=self.hidden_neurons)
+        self.cnn1 = nn.Conv1d(in_channels=self.hidden_neurons, out_channels=self.hidden_neurons*2, kernel_size=3, stride=1)
+#         self.bn1 = nn.BatchNorm1d(self.hidden_neurons*2),
+
+        self.cnn2 = nn.Conv1d(self.hidden_neurons*2, self.hidden_neurons, kernel_size=2, stride=1)
+#         self.bn2 = nn.BatchNorm1d(self.hidden_neurons),
+        self.cnn3 = nn.Conv1d(self.hidden_neurons, self.hidden_neurons, kernel_size=1, stride=1)
+#             nn.BatchNorm1d(self.hidden_neurons),
 #             nn.ReLU()#,
-# #             nn.AvgPool1d(kernel_size=7, stride=1,padding=0) #(Lin+2*p-k)/s+1
+#             nn.AvgPool1d(kernel_size=7, stride=1,padding=0) #(Lin+2*p-k)/s+1
 #         ]#)
         
         self.out = nn.Linear(in_features=hidden_neurons, out_features=output_neurons) # hidden layer to output
         if weight_init:
             weight_init['function'](self.out.weight)
             
+        self.dropout = nn.Dropout(p=dropout_p)
+        self.hidden_activation = nn.ReLU()
         
         
     def forward(self, x, count):
 #         print('raw input size', x.size())
 #         print('lstm altered size', x.view(len(x) ,1, self.input_size).size())
-        lstm_input = x.view(len(x) ,1, self.input_size)
-        lstm_out, self.hidden_cell = self.lstm(lstm_input, self.hidden_cell)
-        lstm_out = self.dropout(lstm_out)
+        cnn_out = None
+        lstm_out = None
+        if self.train_mode == 'lstm' or self.train_mode == 'lstm_cnn':
+            lstm_input = x.view(len(x) ,1, self.input_size)
+            lstm_out, self.hidden_cell = self.lstm(lstm_input, self.hidden_cell)
+            lstm_out = self.dropout(lstm_out)
+
 #         if count % 50 == 0:
 #             print('lstm out:', lstm_out.size())
 #             print('lstm out out:', self.out(lstm_out).size())#, self.out(lstm_out))
@@ -650,17 +761,33 @@ class NeuralNet(nn.Module):
 #         predictions = self.output_activation(self.out(lstm_out))
 #         return predictions[-1]
 
-# #         print('cnn altered size', x.reshape(1, self.input_size, len(x)).size())
-#         cnn_out = x.reshape(1, self.input_size, len(x))
-#         for i, layer in enumerate(self.cnn):
-# #             print(i, '\nx: ', cnn_out.size())
-#             cnn_out = layer(cnn_out)
-# #             print('result: ', cnn_out.size(), '\n')
-#         cnn_out = cnn_out.reshape(-1, 1, 128)
+#         print('cnn altered size', x.reshape(1, self.input_size, len(x)).size())
+        if self.train_mode == 'cnn' or self.train_mode == 'lstm_cnn':
+            cnn_out = x.reshape(1, len(x), self.input_size)
+#             print(cnn_out.size())
+            cnn_out = self.linear1(cnn_out)
+#             print(cnn_out.size())
+            cnn_out = cnn_out.reshape(1, self.hidden_neurons, len(x))
+#             print(cnn_out.size())
+            
+            cnn_out = self.cnn1(cnn_out)
+            cnn_out = self.dropout(cnn_out)
+            cnn_out = self.hidden_activation(cnn_out)
+#             print(cnn_out.size())
+            
+            cnn_out = self.cnn2(cnn_out)
+            cnn_out = self.dropout(cnn_out)
+            cnn_out = self.hidden_activation(cnn_out)
+            
+            cnn_out = self.cnn3(cnn_out)
+            cnn_out = self.dropout(cnn_out)
+            cnn_out = self.hidden_activation(cnn_out)
+            
+            cnn_out = cnn_out.reshape(-1, 1, self.hidden_neurons)
     
     
 #         print(lstm_out.size(), cnn_out.size())
-        features = lstm_out#torch.cat((lstm_out, cnn_out))
+        features = cnn_out if self.train_mode == 'cnn' else lstm_out if self.train_mode == 'lstm' else torch.cat((lstm_out, cnn_out)) #
 #         print(features.size())
         result = self.out(features)
 #         print('res', result.size())
@@ -687,8 +814,8 @@ def dummy_activation(x):
 
 # put all hyper params into a OrderedDict, easily expandable
 params = OrderedDict(
-    data_set = ['sp500'],#'BTCUSDT'], #'sp500', 
-    hidden_neurons = [50],#, 100, 5], #1
+    train_mode = ['lstm', 'cnn', 'lstm_cnn'],
+    hidden_neurons = [75, 150, 225],#, 100, 5], #1
     
     batch_size = [1],
     
@@ -712,14 +839,34 @@ params = OrderedDict(
     validation_split = [0.1],
     
     
-    train_window = [10],
+    train_window = [5, 10],
     pca_components = [None],#10
     label_mode = [
 #         {
 #         'mode': 'since3',
 #         'label_count': 3,
-#         'target_percent': .03, 
-#         'stop_loss_percent': .03
+#         'target_percent': .04, 
+#         'stop_loss_percent': .02
+#     },
+    {
+        'data_set': 'sp500',
+        'mode': 'since_bound_2',
+        'label_count': 2,
+        'target_percent': .015,#115, 
+        'stop_loss_percent': None#.01
+    },
+    {
+        'data_set': 'BTCUSDT',
+        'mode': 'since_bound_2',
+        'label_count': 2,
+        'target_percent': .01,#115, 
+        'stop_loss_percent': None#.01
+    },
+#         {
+#         'mode': 'since',
+#         'label_count': 2,
+#         'target_percent': .02, 
+#         'stop_loss_percent': .01
 #     },
 #         {
 #         'mode': 'average',
@@ -727,16 +874,16 @@ params = OrderedDict(
 #         'target_percent': None, 
 #         'stop_loss_percent': None
 #     },
-        {
-        'mode': 'next',
-        'label_count': 2,
-        'target_percent': None, 
-        'stop_loss_percent': None
-    }
+#         {
+#         'mode': 'next',
+#         'label_count': 2,
+#         'target_percent': None, 
+#         'stop_loss_percent': None
+#     }
     ],
-    rfe_select = [3],
-    chosen_dependent = [ ['Close', 'Volume', 'sma_10'] ],
-    dropout_p = [.4]
+    rfe_select = [3, 6, 10],
+    chosen_dependent = [ ['Volume'], [] ],#, ['Volume'], ['Close'], ['sma_10'] ],
+    dropout_p = [0]
 )
 
 
@@ -779,10 +926,13 @@ m = RunManager()
 
 
 
-epochs = 3
+
+epochs = 6
 # get all runs from params using RunBuilder class
 # print(f"Runs: {RunBuilder.get_runs(params)}")
-for run in RunBuilder.get_runs(params):
+all_runs = list(RunBuilder.get_runs(params))
+random.shuffle(all_runs)
+for run in all_runs:
     print(run)
     # if params changes, following line of code should reflect the changes too
 #     len(m.data_sets[run.data_set]['train'][0][0][0])
@@ -793,7 +943,7 @@ for run in RunBuilder.get_runs(params):
         input_size = len(run.chosen_dependent) + run.rfe_select
 
         net = NeuralNet(input_size=input_size, output_neurons=run.label_mode['label_count'],
-                       dropout_p=run.dropout_p)
+                       dropout_p=run.dropout_p, hidden_neurons=run.hidden_neurons, train_mode=run.train_mode)
     #         hidden_neurons=run.hidden_neurons,
     #         hidden_activation=run.hidden_activation, output_activation=run.loss_output['output_activation'])
         optimizer = run.optimizer(net.parameters(), lr=run.learning_rate, momentum=run.momentum)#copy.deepcopy(run.optimizer)
@@ -814,11 +964,11 @@ for run in RunBuilder.get_runs(params):
             count = 0
             if phase == 'train':
                 net.train()  # Set model to training mode
-#             else:
-#                 net.eval()   # Set model to evaluate mode
+            else:
+                net.eval()   # Set model to evaluate mode
                 
             # Iterate over data.
-            for images, labels in m.data_sets[m.run_params.data_set][phase]:
+            for images, labels in m.data_sets[m.run_params.label_mode['data_set']][phase]:
 
                 if count % 1000 == 0:
                     print(f'sample #{count} {phase} {sum_loss / 1000} {m.epoch_num_correct[phase]}')
@@ -874,8 +1024,8 @@ for run in RunBuilder.get_runs(params):
     y_predict = []
     phase = 'test'
     count = 0
-#     net.eval()
-    for images, labels in m.data_sets[m.run_params.data_set]['test']:
+    net.eval()
+    for images, labels in m.data_sets[m.run_params.label_mode['data_set']]['test']:
 #         print('sample')
         with torch.set_grad_enabled(False):
             X = Variable(images)#.unsqueeze(2)
@@ -897,5 +1047,3 @@ for run in RunBuilder.get_runs(params):
         m.end_run(net)
     else:
         break
-# when all runs are done, show results
-m.results('trial')
