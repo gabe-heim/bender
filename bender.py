@@ -111,7 +111,6 @@ def get_labels(row, data=None, train_window=None, target_percent=.01, stop_loss_
             target_index = data.Close[row[6]:row[6]+train_window+1].loc[data.Close >= row[4] * (1 + target_percent)].index[0]
         except IndexError:
             target_index = data.index.max() + train_window * 2
-        
         if target_index > row[6]+train_window:
             return 0
 
@@ -812,7 +811,6 @@ def cross_entropy(outputs, labels):
 def dummy_activation(x):
     return x
 
-# put all hyper params into a OrderedDict, easily expandable
 params = OrderedDict(
     train_mode = ['lstm', 'cnn', 'lstm_cnn'],
     hidden_neurons = [75, 150, 225],#, 100, 5], #1
@@ -886,7 +884,6 @@ params = OrderedDict(
     dropout_p = [0]
 )
 
-
 def negative_one(x):
     return -1
 
@@ -923,7 +920,6 @@ error_encoding_map = {
 }
 
 m = RunManager()
-
 
 
 
